@@ -58,7 +58,7 @@ public class ExtensionLoader_Adaptive_Test {
         {
             SimpleExt ext = ExtensionLoader.getExtensionLoader(SimpleExt.class).getAdaptiveExtension();
 
-            Map<String, String> map = new HashMap<String, String>();
+            Map<String, String> map = new HashMap<>();
             URL url = new URL("p1", "1.2.3.4", 1010, "path1", map);
 
             String echo = ext.echo(url, "haha");

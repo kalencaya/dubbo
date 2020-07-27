@@ -945,7 +945,7 @@ public final class URL implements Serializable {
         if (hasParameter(key)) {
             return this;
         }
-        Map<String, String> map = new HashMap<String, String>(getParameters());
+        Map<String, String> map = new HashMap<>(getParameters());
         map.put(key, value);
         return new URL(protocol, username, password, host, port, path, map);
     }

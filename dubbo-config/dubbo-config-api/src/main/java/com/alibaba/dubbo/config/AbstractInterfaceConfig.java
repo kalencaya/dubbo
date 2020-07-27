@@ -172,7 +172,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                     address = sysaddress;
                 }
                 if (address.length() > 0 && !RegistryConfig.NO_AVAILABLE.equalsIgnoreCase(address)) {
-                    Map<String, String> map = new HashMap<String, String>();
+                    Map<String, String> map = new HashMap<>();
                     appendParameters(map, application);
                     appendParameters(map, config);
                     map.put("path", RegistryService.class.getName());
@@ -207,7 +207,8 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         if (monitor == null) {
             String monitorAddress = ConfigUtils.getProperty("dubbo.monitor.address");
             String monitorProtocol = ConfigUtils.getProperty("dubbo.monitor.protocol");
-            if ((monitorAddress == null || monitorAddress.length() == 0) && (monitorProtocol == null || monitorProtocol.length() == 0)) {
+            if ((monitorAddress == null || monitorAddress.length() == 0)
+                    && (monitorProtocol == null || monitorProtocol.length() == 0)) {
                 return null;
             }
 

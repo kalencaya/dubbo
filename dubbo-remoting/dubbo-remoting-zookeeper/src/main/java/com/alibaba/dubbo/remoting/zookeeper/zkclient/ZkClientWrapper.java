@@ -133,6 +133,4 @@ public class ZkClientWrapper {
         Assert.notNull(client, new IllegalStateException("Zookeeper is not connected yet!"));
         client.unsubscribeChildChanges(path, listener);
     }
-
-
 }

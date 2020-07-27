@@ -35,6 +35,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @io.netty.channel.ChannelHandler.Sharable
 public class NettyServerHandler extends ChannelDuplexHandler {
 
+    /**
+     * client发起连接后，client_address（ip:port） -> Channel
+     */
     private final Map<String, Channel> channels = new ConcurrentHashMap<String, Channel>(); // <ip:port, channel>
 
     private final URL url;

@@ -33,11 +33,7 @@ import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.transport.dispatcher.ChannelHandlers;
 
 import java.net.InetSocketAddress;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -60,6 +56,11 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
     // reconnect warning period. Reconnect warning interval (log warning after how many times) //for test
     private final int reconnect_warning_period;
     private final long shutdown_timeout;
+    /**
+     * 线程池
+     * 在调用 {@link #wrapChannelHandler(URL, ChannelHandler)} 时，
+     * 会调用 {@link com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler} 创建
+     */
     protected volatile ExecutorService executor;
     private volatile ScheduledFuture<?> reconnectExecutorFuture = null;
     // the last successed connected time
@@ -113,7 +114,9 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
 
     protected static ChannelHandler wrapChannelHandler(URL url, ChannelHandler handler) {
         url = ExecutorUtil.setThreadName(url, CLIENT_THREAD_POOL_NAME);
+        //设置客户端默认业务线程池类型为cached
         url = url.addParameterIfAbsent(Constants.THREADPOOL_KEY, Constants.DEFAULT_CLIENT_THREADPOOL);
+        //任务的分发策略all，direct，message等是通过ChannelHandler实现的，这里使用了装饰器模式。
         return ChannelHandlers.wrap(handler, url);
     }
 

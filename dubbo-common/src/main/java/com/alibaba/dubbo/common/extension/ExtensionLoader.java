@@ -78,7 +78,7 @@ public class ExtensionLoader<T> {
 
     private final ExtensionFactory objectFactory;
 
-    private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<Class<?>, String>();
+    private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<>();
 
     private final Holder<Map<String, Class<?>>> cachedClasses = new Holder<Map<String, Class<?>>>();
 
@@ -183,7 +183,7 @@ public class ExtensionLoader<T> {
      */
     public List<T> getActivateExtension(URL url, String[] values, String group) {
         List<T> exts = new ArrayList<T>();
-        List<String> names = values == null ? new ArrayList<String>(0) : Arrays.asList(values);
+        List<String> names = values == null ? new ArrayList<>(0) : Arrays.asList(values);
         if (!names.contains(Constants.REMOVE_VALUE_PREFIX + Constants.DEFAULT_KEY)) {
             getExtensionClasses();
             for (Map.Entry<String, Activate> entry : cachedActivates.entrySet()) {
@@ -200,7 +200,7 @@ public class ExtensionLoader<T> {
             }
             Collections.sort(exts, ActivateComparator.COMPARATOR);
         }
-        List<T> usrs = new ArrayList<T>();
+        List<T> usrs = new ArrayList<>();
         for (int i = 0; i < names.size(); i++) {
             String name = names.get(i);
             if (!name.startsWith(Constants.REMOVE_VALUE_PREFIX)
@@ -268,7 +268,7 @@ public class ExtensionLoader<T> {
             throw new IllegalArgumentException("Extension name == null");
         Holder<Object> holder = cachedInstances.get(name);
         if (holder == null) {
-            cachedInstances.putIfAbsent(name, new Holder<Object>());
+            cachedInstances.putIfAbsent(name, new Holder<>());
             holder = cachedInstances.get(name);
         }
         return (T) holder.get();
@@ -581,7 +581,7 @@ public class ExtensionLoader<T> {
             }
         }
 
-        Map<String, Class<?>> extensionClasses = new HashMap<String, Class<?>>();
+        Map<String, Class<?>> extensionClasses = new HashMap<>();
         loadDirectory(extensionClasses, DUBBO_INTERNAL_DIRECTORY);
         loadDirectory(extensionClasses, DUBBO_DIRECTORY);
         loadDirectory(extensionClasses, SERVICES_DIRECTORY);
@@ -662,7 +662,7 @@ public class ExtensionLoader<T> {
         } else if (isWrapperClass(clazz)) {
             Set<Class<?>> wrappers = cachedWrapperClasses;
             if (wrappers == null) {
-                cachedWrapperClasses = new ConcurrentHashSet<Class<?>>();
+                cachedWrapperClasses = new ConcurrentHashSet<>();
                 wrappers = cachedWrapperClasses;
             }
             wrappers.add(clazz);
