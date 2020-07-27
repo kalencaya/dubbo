@@ -17,7 +17,10 @@
 package com.alibaba.dubbo.demo.consumer;
 
 import com.alibaba.dubbo.demo.DemoService;
+import com.alibaba.dubbo.demo.TestService;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
+
+import java.util.UUID;
 
 public class Consumer {
 
@@ -28,12 +31,15 @@ public class Consumer {
         ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext(new String[]{"META-INF/spring/dubbo-demo-consumer.xml"});
         context.start();
         DemoService demoService = (DemoService) context.getBean("demoService"); // get remote service proxy
+        TestService testService = (TestService) context.getBean("testService");
 
         while (true) {
             try {
                 Thread.sleep(1000);
                 String hello = demoService.sayHello("world"); // call remote method
+                String test = testService.test(UUID.randomUUID().toString());
                 System.out.println(hello); // get result
+                System.out.println(test);
 
             } catch (Throwable throwable) {
                 throwable.printStackTrace();
