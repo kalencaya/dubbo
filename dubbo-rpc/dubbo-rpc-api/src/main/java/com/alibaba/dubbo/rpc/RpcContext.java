@@ -55,6 +55,9 @@ public class RpcContext {
             return new RpcContext();
         }
     };
+    /**
+     * 用于服务端传递
+     */
     private static final InternalThreadLocal<RpcContext> SERVER_LOCAL = new InternalThreadLocal<RpcContext>() {
         @Override
         protected RpcContext initialValue() {

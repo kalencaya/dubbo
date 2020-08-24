@@ -26,10 +26,17 @@ import java.util.List;
 
 /**
  * AbstractLoadBalance
- *
  */
 public abstract class AbstractLoadBalance implements LoadBalance {
 
+    /**
+     * 这个公式写的很绕，真正的语义是：(uptime / warmup) * weight。相当于进度百分比 * 权重
+     *
+     * @param uptime 服务启动的时间
+     * @param warmup 服务预热时间
+     * @param weight 权重
+     * @return
+     */
     static int calculateWarmupWeight(int uptime, int warmup, int weight) {
         int ww = (int) ((float) uptime / ((float) warmup / (float) weight));
         return ww < 1 ? 1 : (ww > weight ? weight : ww);

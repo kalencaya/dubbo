@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * RegistryConfig
- *
+ * 参考 <a href="http://dubbo.apache.org/zh-cn/docs/user/references/xml/dubbo-registry.html">dubbo:registry</a>
  * @export
  */
 public class RegistryConfig extends AbstractConfig {

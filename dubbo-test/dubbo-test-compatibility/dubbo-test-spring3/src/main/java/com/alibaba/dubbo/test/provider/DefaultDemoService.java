@@ -34,7 +34,11 @@ public class DefaultDemoService implements DemoService {
 
     @Override
     public String sayHello(String name) {
-        return "DefaultDemoService - sayHell() : " + name;
+        return "DefaultDemoService - sayHello() : " + name;
     }
 
+    @Override
+    public String sayWorld(String name) {
+        return "DefaultDemoService - sayWorld() : " + name;
+    }
 }

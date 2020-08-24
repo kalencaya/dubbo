@@ -57,6 +57,7 @@ class ChannelWrappedInvoker<T> extends AbstractInvoker<T> {
         inv.setAttachment(Constants.PATH_KEY, getInterface().getName());
         inv.setAttachment(Constants.CALLBACK_SERVICE_KEY, serviceKey);
 
+        // 超时控制，#request()方法返回的ResponseFuture对象的#get()方法阻塞
         try {
             if (getUrl().getMethodParameter(invocation.getMethodName(), Constants.ASYNC_KEY, false)) { // may have concurrency issue
                 currentClient.send(inv, getUrl().getMethodParameter(invocation.getMethodName(), Constants.SENT_KEY, false));

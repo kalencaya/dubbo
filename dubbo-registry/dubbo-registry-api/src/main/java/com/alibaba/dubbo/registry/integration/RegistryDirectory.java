@@ -26,36 +26,18 @@ import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.common.utils.StringUtils;
 import com.alibaba.dubbo.registry.NotifyListener;
 import com.alibaba.dubbo.registry.Registry;
-import com.alibaba.dubbo.rpc.Invocation;
-import com.alibaba.dubbo.rpc.Invoker;
-import com.alibaba.dubbo.rpc.Protocol;
-import com.alibaba.dubbo.rpc.RpcException;
-import com.alibaba.dubbo.rpc.RpcInvocation;
-import com.alibaba.dubbo.rpc.cluster.Cluster;
-import com.alibaba.dubbo.rpc.cluster.Configurator;
-import com.alibaba.dubbo.rpc.cluster.ConfiguratorFactory;
-import com.alibaba.dubbo.rpc.cluster.Router;
-import com.alibaba.dubbo.rpc.cluster.RouterFactory;
+import com.alibaba.dubbo.rpc.*;
+import com.alibaba.dubbo.rpc.cluster.*;
 import com.alibaba.dubbo.rpc.cluster.directory.AbstractDirectory;
 import com.alibaba.dubbo.rpc.cluster.directory.StaticDirectory;
 import com.alibaba.dubbo.rpc.cluster.support.ClusterUtils;
 import com.alibaba.dubbo.rpc.protocol.InvokerWrapper;
 import com.alibaba.dubbo.rpc.support.RpcUtils;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * RegistryDirectory
- *
  */
 public class RegistryDirectory<T> extends AbstractDirectory<T> implements NotifyListener {
 
@@ -66,16 +48,55 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
     private static final RouterFactory routerFactory = ExtensionLoader.getExtensionLoader(RouterFactory.class).getAdaptiveExtension();
 
     private static final ConfiguratorFactory configuratorFactory = ExtensionLoader.getExtensionLoader(ConfiguratorFactory.class).getAdaptiveExtension();
+
+    /**
+     * 服务类型，例如：com.alibaba.dubbo.demo.DemoService
+     */
     private final String serviceKey; // Initialization at construction time, assertion not null
     private final Class<T> serviceType; // Initialization at construction time, assertion not null
+    /**
+     * Consumer URL 的配置项 Map
+     */
     private final Map<String, String> queryMap; // Initialization at construction time, assertion not null
+    /**
+     * 原始的目录 URL
+     * 例如：zookeeper://127.0.0.1:2181/com.alibaba.dubbo.registry.RegistryService?
+     * application=demo-consumer&callbacks=1000&check=false&client=netty4
+     * &cluster=failback&dubbo=2.0.0
+     * &interface=com.alibaba.dubbo.demo.DemoService
+     * &methods=sayHello,callbackParam,save,update,say03,delete,say04,demo,say01,bye,say02,saves
+     * &payload=1000&pid=63400&qos.port=33333&register.ip=192.168.16.23
+     * &sayHello.async=true&side=consumer&timeout=10000&timestamp=1527056491064
+     */
     private final URL directoryUrl; // Initialization at construction time, assertion not null, and always assign non null value
+    /**
+     * 服务方法数组
+     */
     private final String[] serviceMethods;
+    /**
+     * 服务分组：http://dubbo.apache.org/zh-cn/docs/user/demos/service-group.html
+     */
     private final boolean multiGroup;
+    /**
+     * 注册中心的 Protocol 对象
+     */
     private Protocol protocol; // Initialization at the time of injection, the assertion is not null
+    /**
+     * 注册中心
+     */
     private Registry registry; // Initialization at the time of injection, the assertion is not null
+    /**
+     * 是否禁止访问。
+     * <p>
+     * 有两种情况会导致：
+     * <p>
+     * 1. 没有服务提供者
+     * 2. 服务提供者被禁用
+     */
     private volatile boolean forbidden = false;
-
+    /**
+     * 覆写的目录 URL ，结合配置规则
+     */
     private volatile URL overrideDirectoryUrl; // Initialization at construction time, assertion not null, and always assign non null value
 
     private volatile URL registeredConsumerUrl;
@@ -156,6 +177,9 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         this.registry = registry;
     }
 
+    /**
+     * @param url
+     */
     public void subscribe(URL url) {
         setConsumerUrl(url);
         registry.subscribe(url, this);
@@ -192,6 +216,11 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    /**
+     * 注册中心监听变动的回调方法。
+     *
+     * @param urls The list of registered information , is always not empty. The meaning is the same as the return value of {@link com.alibaba.dubbo.registry.RegistryService#lookup(URL)}.
+     */
     @Override
     public synchronized void notify(List<URL> urls) {
         List<URL> invokerUrls = new ArrayList<URL>();
@@ -586,8 +615,8 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         if (forbidden) {
             // 1. No service provider 2. Service providers are disabled
             throw new RpcException(RpcException.FORBIDDEN_EXCEPTION,
-                "No provider available from registry " + getUrl().getAddress() + " for service " + getConsumerUrl().getServiceKey() + " on consumer " +  NetUtils.getLocalHost()
-                        + " use dubbo version " + Version.getVersion() + ", please check status of providers(disabled, not registered or in blacklist).");
+                    "No provider available from registry " + getUrl().getAddress() + " for service " + getConsumerUrl().getServiceKey() + " on consumer " + NetUtils.getLocalHost()
+                            + " use dubbo version " + Version.getVersion() + ", please check status of providers(disabled, not registered or in blacklist).");
         }
         List<Invoker<T>> invokers = null;
         Map<String, List<Invoker<T>>> localMethodInvokerMap = this.methodInvokerMap; // local reference

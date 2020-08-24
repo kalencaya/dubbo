@@ -23,12 +23,7 @@ import com.alibaba.dubbo.common.extension.ExtensionLoader;
 import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
 import com.alibaba.dubbo.common.utils.NetUtils;
-import com.alibaba.dubbo.rpc.Invocation;
-import com.alibaba.dubbo.rpc.Invoker;
-import com.alibaba.dubbo.rpc.RpcContext;
-import com.alibaba.dubbo.rpc.RpcInvocation;
-import com.alibaba.dubbo.rpc.Result;
-import com.alibaba.dubbo.rpc.RpcException;
+import com.alibaba.dubbo.rpc.*;
 import com.alibaba.dubbo.rpc.cluster.Directory;
 import com.alibaba.dubbo.rpc.cluster.LoadBalance;
 import com.alibaba.dubbo.rpc.support.RpcUtils;
@@ -40,7 +35,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AbstractClusterInvoker
- *
  */
 public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
 
@@ -52,6 +46,10 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
 
     private AtomicBoolean destroyed = new AtomicBoolean(false);
 
+    /**
+     * 粘滞连接 Invoker
+     * http://dubbo.apache.org/zh-cn/docs/user/demos/stickiness.html
+     */
     private volatile Invoker<T> stickyInvoker = null;
 
     public AbstractClusterInvoker(Directory<T> directory) {
@@ -95,16 +93,16 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
 
     /**
      * Select a invoker using loadbalance policy.</br>
-     * a)Firstly, select an invoker using loadbalance. If this invoker is in previously selected list, or, 
+     * a)Firstly, select an invoker using loadbalance. If this invoker is in previously selected list, or,
      * if this invoker is unavailable, then continue step b (reselect), otherwise return the first selected invoker</br>
      * b)Reslection, the validation rule for reselection: selected > available. This rule guarantees that
-     * the selected invoker has the minimum chance to be one in the previously selected list, and also 
+     * the selected invoker has the minimum chance to be one in the previously selected list, and also
      * guarantees this invoker is available.
      *
      * @param loadbalance load balance policy
      * @param invocation
-     * @param invokers invoker candidates
-     * @param selected  exclude selected invokers or not
+     * @param invokers    invoker candidates
+     * @param selected    exclude selected invokers or not. 已选过的 Invoker 集合. 注意：输入保证不重复
      * @return
      * @throws RpcException
      */
@@ -113,8 +111,7 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
             return null;
         String methodName = invocation == null ? "" : invocation.getMethodName();
 
-        boolean sticky = invokers.get(0).getUrl().getMethodParameter(methodName, Constants.CLUSTER_STICKY_KEY, Constants.DEFAULT_CLUSTER_STICKY);
-        {
+        boolean sticky = invokers.get(0).getUrl().getMethodParameter(methodName, Constants.CLUSTER_STICKY_KEY, Constants.DEFAULT_CLUSTER_STICKY);{
             //ignore overloaded method
             if (stickyInvoker != null && !invokers.contains(stickyInvoker)) {
                 stickyInvoker = null;

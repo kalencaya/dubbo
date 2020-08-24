@@ -32,7 +32,7 @@ import java.util.Map;
 
 /**
  * ProtocolConfig
- *
+ * 参考 <a href="http://dubbo.apache.org/zh-cn/docs/user/references/xml/dubbo-protocol.html">dubbo:protocol</a>
  * @export
  */
 public class ProtocolConfig extends AbstractConfig {
@@ -40,91 +40,294 @@ public class ProtocolConfig extends AbstractConfig {
     private static final long serialVersionUID = 6913423882496634749L;
 
     // protocol name
+    /**
+     * 对应URL参数：<protocol> 带<>表明是<protocol>://<host>:<port>?key=value，如果是?后面的参数则直接是keyName
+     * 是否必填：必填
+     * 默认值：dubbo
+     * 作用：性能调优
+     * 描述：协议名称
+     */
     private String name;
 
     // service IP address (when there are multiple network cards available)
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String host;
 
     // service port
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Integer port;
 
     // context path
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：缺省为空串
+     * 作用：
+     * 描述：
+     */
     private String contextpath;
 
     // thread pool
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String threadpool;
 
     // thread pool size (fixed size)
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Integer threads;
 
     // IO thread pool size (fixed size)
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Integer iothreads;
 
     // thread pool's queue length
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Integer queues;
 
     // max acceptable connections
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Integer accepts;
 
     // protocol codec
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String codec;
 
     // serialization
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String serialization;
 
     // charset
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String charset;
 
     // payload max length
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Integer payload;
 
     // buffer size
+    /**
+     * 对应URL参数：buffer
+     * 是否必填：可选
+     * 默认值：8192
+     * 作用：性能调优
+     * 描述：网络读写缓冲区大小
+     */
     private Integer buffer;
 
     // heartbeat interval
+    /**
+     * 对应URL参数：heartbeat
+     * 是否必填：可选
+     * 默认值：0
+     * 作用：性能调优
+     * 描述：心跳间隔，对于长连接，当物理层断开时，比如拔网线，TCP的FIN消息来不及发送，对方收不到断开事件，此时需要心跳来帮助检查连接是否已断开
+     */
     private Integer heartbeat;
 
     // access log
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String accesslog;
 
     // transfort
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String transporter;
 
     // how information is exchanged
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String exchanger;
 
     // thread dispatch mode
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String dispatcher;
 
     // networker
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String networker;
 
     // sever impl
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String server;
 
     // client impl
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String client;
 
     // supported telnet commands, separated with comma.
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String telnet;
 
     // command line prompt
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String prompt;
 
     // status check
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String status;
 
     // whether to register
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Boolean register;
 
     // parameters
     // 是否长连接
     // TODO add this to provider config
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private Boolean keepAlive;
 
     // TODO add this to provider config
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String optimizer;
 
+    /**
+     * 对应URL参数：
+     * 是否必填：
+     * 默认值：
+     * 作用：
+     * 描述：
+     */
     private String extension;
 
     // parameters
@@ -145,6 +348,9 @@ public class ProtocolConfig extends AbstractConfig {
         setPort(port);
     }
 
+    /**
+     * 对于@Parameter注解的处理只涉及到了getter方法
+     */
     @Parameter(excluded = true)
     public String getName() {
         return name;
