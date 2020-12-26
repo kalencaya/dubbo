@@ -33,7 +33,7 @@ public class Consumer {
         DemoService demoService = (DemoService) context.getBean("demoService"); // get remote service proxy
         TestService testService = (TestService) context.getBean("testService");
 
-        while (true) {
+//        while (true) {
             try {
                 Thread.sleep(1000);
                 String hello = demoService.sayHello("world"); // call remote method
@@ -44,7 +44,7 @@ public class Consumer {
             } catch (Throwable throwable) {
                 throwable.printStackTrace();
             }
-        }
+//        }
 
     }
 }

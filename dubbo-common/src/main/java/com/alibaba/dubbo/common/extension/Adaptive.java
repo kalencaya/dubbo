@@ -53,6 +53,12 @@ public @interface Adaptive {
      * dot '.', for example: for {@code com.alibaba.dubbo.xxx.YyyInvokerWrapper}, its default name is
      * <code>String[] {"yyy.invoker.wrapper"}</code>. This name will be used to search for parameter from URL.
      *
+     * 决定注入哪个extension。target extension name 由方法给出的参数名和使用参数名从URL中获取的参数值决定。
+     *
+     * 如果指定的参数没有从URL中获取，使用默认的extension（SPI注解指定）。如果SPI没有给出，则使用接口名
+     * 转化为class.name的格式，然后使用class.name作为key从URL获取extension name。注意，SPI注解指定的
+     * 是extension name，而Adaptive和class.name都是做为key从URL中获取extension name。
+     *
      * @return parameter key names in URL
      */
     String[] value() default {};

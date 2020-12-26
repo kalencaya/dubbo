@@ -47,13 +47,27 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
     protected static final String CLIENT_THREAD_POOL_NAME = "DubboClientHandler";
     private static final Logger logger = LoggerFactory.getLogger(AbstractClient.class);
     private static final AtomicInteger CLIENT_THREAD_POOL_ID = new AtomicInteger();
+
+    /**
+     * 客户端重连线程池
+     */
     private static final ScheduledThreadPoolExecutor reconnectExecutorService = new ScheduledThreadPoolExecutor(2, new NamedThreadFactory("DubboClientReconnectTimer", true));
+    /**
+     * 重连锁
+     */
     private final Lock connectLock = new ReentrantLock();
     private final boolean send_reconnect;
     private final AtomicInteger reconnect_count = new AtomicInteger(0);
     // Reconnection error log has been called before?
+    /**
+     * 重连的error日志只会打印一次，而之后打印的都是warn日志
+     */
     private final AtomicBoolean reconnect_error_log_flag = new AtomicBoolean(false);
     // reconnect warning period. Reconnect warning interval (log warning after how many times) //for test
+    /**
+     * 控制打印重连error日志的频率，因为有些中间件类库在实现的时候会
+     * 打印非常多地日志，压倒主应用日志
+     */
     private final int reconnect_warning_period;
     private final long shutdown_timeout;
     /**
@@ -106,6 +120,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                             + " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
         }
 
+        //{@link com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler} 创建
         executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class)
                 .getDefaultExtension().get(Constants.CONSUMER_SIDE, Integer.toString(url.getPort()));
         ExtensionLoader.getExtensionLoader(DataStore.class)
@@ -113,6 +128,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
     }
 
     protected static ChannelHandler wrapChannelHandler(URL url, ChannelHandler handler) {
+        // 为线程池名称添加本地地址后缀
         url = ExecutorUtil.setThreadName(url, CLIENT_THREAD_POOL_NAME);
         //设置客户端默认业务线程池类型为cached
         url = url.addParameterIfAbsent(Constants.THREADPOOL_KEY, Constants.DEFAULT_CLIENT_THREADPOOL);
@@ -255,6 +271,10 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
         return channel.hasAttribute(key);
     }
 
+    /**
+     * 其实client继承channel，这里将发送的工作最后代理给channel。。。
+     * 设计有点搓
+     */
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
         if (send_reconnect && !isConnected()) {

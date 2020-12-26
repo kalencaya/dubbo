@@ -38,6 +38,7 @@ public interface ProxyFactory {
 
     /**
      * create proxy.
+     * 服务消费者使用
      *
      * @param invoker
      * @return proxy
@@ -47,6 +48,8 @@ public interface ProxyFactory {
 
     /**
      * create invoker.
+     * 对于本地service实例创建一个Wrapper，用于实现调用本地service的方法。服务提供者使用
+     * jdk使用了反射，javaassit使用代码生成路由到每个方法
      *
      * @param <T>
      * @param proxy

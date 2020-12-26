@@ -110,6 +110,13 @@ public abstract class Wrapper {
         return ret;
     }
 
+    /**
+     * 实现方法路由
+     * rpc调用参数中会传送接口名，方法名，请求参数类型数组。当提供者收到请求时，
+     * 需要根据接口名找到对应的Exporter（还需要端口号，group，version），当调用
+     * ref实例方法时可以通过反射调用，这里通过代码生成自动生成每个方法的路由，避免
+     * 反射的性能低下
+     */
     private static Wrapper makeWrapper(Class<?> c) {
         if (c.isPrimitive())
             throw new IllegalArgumentException("Can not create wrapper for primitive type: " + c);
@@ -121,6 +128,7 @@ public abstract class Wrapper {
         StringBuilder c2 = new StringBuilder("public Object getPropertyValue(Object o, String n){ ");
         StringBuilder c3 = new StringBuilder("public Object invokeMethod(Object o, String n, Class[] p, Object[] v) throws " + InvocationTargetException.class.getName() + "{ ");
 
+        // 强制类型转换
         c1.append(name).append(" w; try{ w = ((").append(name).append(")$1); }catch(Throwable e){ throw new IllegalArgumentException(e); }");
         c2.append(name).append(" w; try{ w = ((").append(name).append(")$1); }catch(Throwable e){ throw new IllegalArgumentException(e); }");
         c3.append(name).append(" w; try{ w = ((").append(name).append(")$1); }catch(Throwable e){ throw new IllegalArgumentException(e); }");

@@ -153,12 +153,17 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     });
                     zkListener = listeners.get(listener);
                 }
+                // 创建 root 节点。该节点为持久节点。
                 zkClient.create(root, false);
+                // 向 Zookeeper root 节点，发起订阅
                 List<String> services = zkClient.addChildListener(root, zkListener);
+                // 首次全量数据获取完成时，循环 Service 接口全名数组，发起该 Service 层的订阅
                 if (services != null && !services.isEmpty()) {
                     for (String service : services) {
                         service = URL.decode(service);
                         anyServices.add(service);
+                        // 创建service的url，发起订阅
+                        // 设置Constants.INTERFACE_KEY，在递归处理中就不会走到这里，而是在Constants.ANY_VALUE.equals(url.getServiceInterface())返回false进入else分支
                         subscribe(url.setPath(service).addParameters(Constants.INTERFACE_KEY, service,
                                 Constants.CHECK_KEY, String.valueOf(false)), listener);
                     }
