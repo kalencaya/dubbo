@@ -17,17 +17,23 @@
 package org.apache.dubbo.qos.command.impl;
 
 
+import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.UrlUtils;
-import org.apache.dubbo.registry.Registry;
+import org.apache.dubbo.qos.command.annotation.Cmd;
 import org.apache.dubbo.rpc.model.ProviderModel;
 
+@Cmd(name = "onlineApp", summary = "online app addresses", example = {
+        "onlineApp",
+        "onlineApp xx.xx.xxx.service"
+})
 public class OnlineApp extends BaseOnline {
+    private static final Logger logger = LoggerFactory.getLogger(OnlineApp.class);
+
     @Override
     protected void doExport(ProviderModel.RegisterStatedURL statedURL) {
-        if (!UrlUtils.isServiceDiscoveryRegistryType(statedURL.getRegistryUrl())) {
-            Registry registry = registryFactory.getRegistry(statedURL.getRegistryUrl());
-            registry.register(statedURL.getProviderUrl());
-            statedURL.setRegistered(true);
+        if (UrlUtils.isServiceDiscoveryURL(statedURL.getRegistryUrl())) {
+           super.doExport(statedURL);
         }
     }
 }

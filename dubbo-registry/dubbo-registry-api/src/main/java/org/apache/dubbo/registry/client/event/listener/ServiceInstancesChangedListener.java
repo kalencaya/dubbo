@@ -48,13 +48,14 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.dubbo.common.constants.CommonConstants.REMOTE_METADATA_STORAGE_TYPE;
-import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_CLUSTER_KEY;
-import static org.apache.dubbo.metadata.MetadataInfo.DEFAULT_REVISION;
+import static org.apache.dubbo.metadata.RevisionResolver.EMPTY_REVISION;
 import static org.apache.dubbo.registry.client.metadata.ServiceInstanceMetadataUtils.getExportedServicesRevision;
 
 /**
@@ -67,23 +68,22 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
 
     private static final Logger logger = LoggerFactory.getLogger(ServiceInstancesChangedListener.class);
 
-    private final Set<String> serviceNames;
-    private final ServiceDiscovery serviceDiscovery;
-    private URL url;
-    private Map<String, NotifyListener> listeners;
+    protected final Set<String> serviceNames;
+    protected final ServiceDiscovery serviceDiscovery;
+    protected URL url;
+    protected Map<String, NotifyListener> listeners;
+    protected AtomicBoolean destroyed = new AtomicBoolean(false);
 
-    private Map<String, List<ServiceInstance>> allInstances;
-
-    private Map<String, List<URL>> serviceUrls;
-
-    private Map<String, MetadataInfo> revisionToMetadata;
+    protected Map<String, List<ServiceInstance>> allInstances;
+    protected Map<String, Object> serviceUrls;
+    protected Map<String, MetadataInfo> revisionToMetadata;
 
     private volatile long lastRefreshTime;
     private volatile long lastFailureTime;
     private volatile AtomicInteger failureCounter = new AtomicInteger(0);
     private Semaphore retryPermission;
-
-    private ScheduledExecutorService scheduler;
+    private volatile ScheduledFuture<?> retryFuture;
+    private static ScheduledExecutorService scheduler = ExtensionLoader.getExtensionLoader(ExecutorRepository.class).getDefaultExtension().getMetadataRetryExecutor();
 
     public ServiceInstancesChangedListener(Set<String> serviceNames, ServiceDiscovery serviceDiscovery) {
         this.serviceNames = serviceNames;
@@ -93,7 +93,6 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         this.serviceUrls = new HashMap<>();
         this.revisionToMetadata = new HashMap<>();
         retryPermission = new Semaphore(1);
-        this.scheduler = ExtensionLoader.getExtensionLoader(ExecutorRepository.class).getDefaultExtension().getMetadataRetryExecutor();
     }
 
     /**
@@ -111,16 +110,16 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         }
 
         Map<String, List<ServiceInstance>> revisionToInstances = new HashMap<>();
-        Map<String, Set<String>> localServiceToRevisions = new HashMap<>();
-        Map<Set<String>, List<URL>> revisionsToUrls = new HashMap<>();
-        Map<String, List<URL>> newServiceUrls = new HashMap<>();//TODO
+        Map<ServiceInfo, Set<String>> localServiceToRevisions = new HashMap<>();
+        Map<String, Map<Set<String>, Object>> protocolRevisionsToUrls = new HashMap<>();
+        Map<String, Object> newServiceUrls = new HashMap<>();//TODO
         Map<String, MetadataInfo> newRevisionToMetadata = new HashMap<>();
 
         for (Map.Entry<String, List<ServiceInstance>> entry : allInstances.entrySet()) {
             List<ServiceInstance> instances = entry.getValue();
             for (ServiceInstance instance : instances) {
                 String revision = getExportedServicesRevision(instance);
-                if (DEFAULT_REVISION.equals(revision)) {
+                if (EMPTY_REVISION.equals(revision)) {
                     logger.info("Find instance without valid service metadata: " + instance.getAddress());
                     continue;
                 }
@@ -135,11 +134,11 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
             }
         }
 
-        logger.info(newRevisionToMetadata.size() + " unique revisions. ");
+        logger.info(newRevisionToMetadata.size() + " unique revisions: " + newRevisionToMetadata.keySet());
 
         if (hasEmptyMetadata(newRevisionToMetadata)) {// retry every 10 seconds
             if (retryPermission.tryAcquire()) {
-                scheduler.scheduleAtFixedRate(new AddressRefreshRetryTask(retryPermission), 10000, 10000, TimeUnit.MILLISECONDS);
+                retryFuture = scheduler.schedule(new AddressRefreshRetryTask(retryPermission), 10000, TimeUnit.MILLISECONDS);
                 logger.warn("Address refresh try task submitted.");
             }
             logger.warn("Address refresh failed because of Metadata Server failure, wait for retry or new address refresh event.");
@@ -149,19 +148,18 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
 
         this.revisionToMetadata = newRevisionToMetadata;
 
-        localServiceToRevisions.forEach((serviceKey, revisions) -> {
-            List<URL> urls = revisionsToUrls.get(revisions);
+        localServiceToRevisions.forEach((serviceInfo, revisions) -> {
+            String protocol = serviceInfo.getProtocol();
+            Map<Set<String>, Object> revisionsToUrls = protocolRevisionsToUrls.computeIfAbsent(protocol, k -> {
+                return new HashMap<>();
+            });
+            Object urls = revisionsToUrls.get(revisions);
             if (urls != null) {
-                newServiceUrls.put(serviceKey, urls);
+                newServiceUrls.put(serviceInfo.getMatchKey(), urls);
             } else {
-                urls = new ArrayList<>();
-                for (String r : revisions) {
-                    for (ServiceInstance i : revisionToInstances.get(r)) {
-                        urls.add(i.toURL());
-                    }
-                }
+                urls = getServiceUrlsCache(revisionToInstances, revisions, protocol);
                 revisionsToUrls.put(revisions, urls);
-                newServiceUrls.put(serviceKey, urls);
+                newServiceUrls.put(serviceInfo.getMatchKey(), urls);
             }
         });
         this.serviceUrls = newServiceUrls;
@@ -169,9 +167,9 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         this.notifyAddressChanged();
     }
 
-    public synchronized void addListener(String serviceKey, NotifyListener listener) {
+    public synchronized void addListenerAndNotify(String serviceKey, NotifyListener listener) {
         this.listeners.put(serviceKey, listener);
-        List<URL> urls = this.serviceUrls.get(serviceKey);
+        List<URL> urls = getAddresses(serviceKey, listener.getConsumerUrl());
         if (CollectionUtils.isNotEmpty(urls)) {
             listener.notify(urls);
         }
@@ -179,13 +177,11 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
 
     public void removeListener(String serviceKey) {
         listeners.remove(serviceKey);
+        logger.info("Interface listener of interface " + serviceKey + " removed.");
         if (listeners.isEmpty()) {
+            logger.info("No interface listeners exist, will stop instance listener for " + this.getServiceNames());
             serviceDiscovery.removeServiceInstancesChangedListener(this);
         }
-    }
-
-    public List<URL> getUrls(String serviceKey) {
-        return toUrlsWithEmpty(serviceUrls.get(serviceKey));
     }
 
     /**
@@ -205,6 +201,22 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         return url;
     }
 
+    public Map<String, List<ServiceInstance>> getAllInstances() {
+        return allInstances;
+    }
+
+    public List<ServiceInstance> getInstancesOfApp(String appName) {
+        return allInstances.get(appName);
+    }
+
+    public Map<String, MetadataInfo> getRevisionToMetadata() {
+        return revisionToMetadata;
+    }
+
+    public MetadataInfo getMetadata(String revision) {
+        return revisionToMetadata.get(revision);
+    }
+
     /**
      * @param event {@link ServiceInstancesChangedEvent event}
      * @return If service name matches, return <code>true</code>, or <code>false</code>
@@ -213,8 +225,7 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         return serviceNames.contains(event.getServiceName());
     }
 
-
-    private boolean isRetryAndExpired(ServiceInstancesChangedEvent event) {
+    protected boolean isRetryAndExpired(ServiceInstancesChangedEvent event) {
         String appName = event.getServiceName();
         List<ServiceInstance> appInstances = event.getServiceInstances();
 
@@ -234,13 +245,13 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         return false;
     }
 
-    private boolean hasEmptyMetadata(Map<String, MetadataInfo> revisionToMetadata) {
+    protected boolean hasEmptyMetadata(Map<String, MetadataInfo> revisionToMetadata) {
         if (revisionToMetadata == null) {
             return false;
         }
         boolean result = false;
         for (Map.Entry<String, MetadataInfo> entry : revisionToMetadata.entrySet()) {
-            if (entry.getValue() == null) {
+            if (entry.getValue() == MetadataInfo.EMPTY) {
                 result = true;
                 break;
             }
@@ -248,44 +259,50 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
         return result;
     }
 
-    private MetadataInfo getRemoteMetadata(ServiceInstance instance, String revision, Map<String, Set<String>> localServiceToRevisions, List<ServiceInstance> subInstances) {
+    protected MetadataInfo getRemoteMetadata(ServiceInstance instance, String revision, Map<ServiceInfo, Set<String>> localServiceToRevisions, List<ServiceInstance> subInstances) {
         MetadataInfo metadata = revisionToMetadata.get(revision);
-        if (metadata == null) {
-            if (failureCounter.get() < 3 || (System.currentTimeMillis() - lastFailureTime > 5000)) {
-                metadata = getMetadataInfo(instance);
-                if (metadata != null) {
-                    logger.info("MetadataInfo for instance " + instance.getAddress() + "?revision=" + revision + " is " + metadata);
-                    failureCounter.set(0);
-                    revisionToMetadata.putIfAbsent(revision, metadata);
-                    parseMetadata(revision, metadata, localServiceToRevisions);
-                } else {
-                    logger.error("Failed to get MetadataInfo for instance " + instance.getAddress() + "?revision=" + revision
-                            + ", async task added, wait for retry.");
-                    lastFailureTime = System.currentTimeMillis();
-                    failureCounter.incrementAndGet();
-                }
+
+        if (metadata != null && metadata != MetadataInfo.EMPTY) {
+            logger.info("MetadataInfo for instance " + instance.getAddress() + "?revision=" + revision + "&cluster=" + instance.getRegistryCluster() + ", " + metadata);
+        }
+
+        if (metadata == null
+                || (metadata == MetadataInfo.EMPTY && (failureCounter.get() < 3 || (System.currentTimeMillis() - lastFailureTime > 10000)))) {
+            metadata = getMetadataInfo(instance);
+
+            if (metadata != MetadataInfo.EMPTY) {
+                failureCounter.set(0);
+                revisionToMetadata.putIfAbsent(revision, metadata);
+                parseMetadata(revision, metadata, localServiceToRevisions);
+            } else {
+                logger.error("Failed to get MetadataInfo for instance " + instance.getAddress() + "?revision=" + revision
+                        + "&cluster=" + instance.getRegistryCluster() + ", wait for retry.");
+                lastFailureTime = System.currentTimeMillis();
+                failureCounter.incrementAndGet();
             }
-        } else if (subInstances.size() == 1) {
+        } else if (metadata != MetadataInfo.EMPTY && subInstances.size() == 1) {
             // "subInstances.size() >= 2" means metadata of this revision has been parsed, ignore
             parseMetadata(revision, metadata, localServiceToRevisions);
         }
         return metadata;
     }
 
-    private Map<String, Set<String>> parseMetadata(String revision, MetadataInfo metadata, Map<String, Set<String>> localServiceToRevisions) {
+    protected Map<ServiceInfo, Set<String>> parseMetadata(String revision, MetadataInfo metadata, Map<ServiceInfo, Set<String>> localServiceToRevisions) {
         Map<String, ServiceInfo> serviceInfos = metadata.getServices();
         for (Map.Entry<String, ServiceInfo> entry : serviceInfos.entrySet()) {
-            Set<String> set = localServiceToRevisions.computeIfAbsent(entry.getKey(), k -> new TreeSet<>());
+            Set<String> set = localServiceToRevisions.computeIfAbsent(entry.getValue(), k -> new TreeSet<>());
             set.add(revision);
         }
 
         return localServiceToRevisions;
     }
 
-    private MetadataInfo getMetadataInfo(ServiceInstance instance) {
+    protected MetadataInfo getMetadataInfo(ServiceInstance instance) {
         String metadataType = ServiceInstanceMetadataUtils.getMetadataStorageType(instance);
         // FIXME, check "REGISTRY_CLUSTER_KEY" must be set by every registry implementation.
-        instance.getExtendParams().putIfAbsent(REGISTRY_CLUSTER_KEY, RegistryClusterIdentifier.getExtension(url).consumerKey(url));
+        if (instance.getRegistryCluster() == null) {
+            instance.setRegistryCluster(RegistryClusterIdentifier.getExtension(url).consumerKey(url));
+        }
         MetadataInfo metadataInfo;
         try {
             if (logger.isDebugEnabled()) {
@@ -298,30 +315,75 @@ public class ServiceInstancesChangedListener implements ConditionalEventListener
                 MetadataService metadataServiceProxy = MetadataUtils.getMetadataServiceProxy(instance, serviceDiscovery);
                 metadataInfo = metadataServiceProxy.getMetadataInfo(ServiceInstanceMetadataUtils.getExportedServicesRevision(instance));
             }
-            if (logger.isDebugEnabled()) {
-                logger.info("Metadata " + metadataInfo.toString());
-            }
+            logger.info("Metadata " + metadataInfo);
         } catch (Exception e) {
             logger.error("Failed to load service metadata, meta type is " + metadataType, e);
             metadataInfo = null;
         }
+
+        if (metadataInfo == null) {
+            metadataInfo = MetadataInfo.EMPTY;
+        }
         return metadataInfo;
     }
 
-    private void notifyAddressChanged() {
+    protected Object getServiceUrlsCache(Map<String, List<ServiceInstance>> revisionToInstances, Set<String> revisions, String protocol) {
+        List<URL> urls;
+        urls = new ArrayList<>();
+        for (String r : revisions) {
+            for (ServiceInstance i : revisionToInstances.get(r)) {
+                // different protocols may have ports specified in meta
+                if (ServiceInstanceMetadataUtils.hasEndpoints(i)) {
+                    DefaultServiceInstance.Endpoint endpoint = ServiceInstanceMetadataUtils.getEndpoint(i, protocol);
+                    if (endpoint != null && !endpoint.getPort().equals(i.getPort())) {
+                        urls.add(((DefaultServiceInstance) i).copy(endpoint).toURL());
+                        break;
+                    }
+                }
+                urls.add(i.toURL());
+            }
+        }
+        return urls;
+    }
+
+    protected List<URL> getAddresses(String serviceProtocolKey, URL consumerURL) {
+        return (List<URL>) serviceUrls.get(serviceProtocolKey);
+    }
+
+    protected void notifyAddressChanged() {
         listeners.forEach((key, notifyListener) -> {
             //FIXME, group wildcard match
-            List<URL> urls = toUrlsWithEmpty(serviceUrls.get(key));
+            List<URL> urls = toUrlsWithEmpty(getAddresses(key, notifyListener.getConsumerUrl()));
             logger.info("Notify service " + key + " with urls " + urls.size());
             notifyListener.notify(urls);
         });
     }
 
-    private List<URL> toUrlsWithEmpty(List<URL> urls) {
+    protected List<URL> toUrlsWithEmpty(List<URL> urls) {
         if (urls == null) {
             urls = Collections.emptyList();
         }
         return urls;
+    }
+
+    /**
+     * Since this listener is shared among interfaces, destroy this listener only when all interface listener are unsubscribed
+     */
+    public void destroy() {
+        if (destroyed.compareAndSet(false, true)) {
+            if (CollectionUtils.isEmptyMap(listeners)) {
+                allInstances.clear();
+                serviceUrls.clear();
+                revisionToMetadata.clear();
+                if (retryFuture != null && !retryFuture.isDone()) {
+                    retryFuture.cancel(true);
+                }
+            }
+        }
+    }
+
+    public boolean isDestroyed() {
+        return destroyed.get();
     }
 
     @Override

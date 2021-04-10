@@ -42,7 +42,8 @@ import static org.apache.dubbo.common.constants.CommonConstants.GROUP_CHAR_SEPAR
 import static org.apache.dubbo.common.constants.CommonConstants.METHODS_KEY;
 
 public class MetadataInfo implements Serializable {
-    public static String DEFAULT_REVISION = "0";
+    public static final MetadataInfo EMPTY = new MetadataInfo();
+
     private String app;
     private String revision;
     private Map<String, ServiceInfo> services;
@@ -50,6 +51,8 @@ public class MetadataInfo implements Serializable {
     // used at runtime
     private transient Map<String, String> extendParams;
     private transient AtomicBoolean reported = new AtomicBoolean(false);
+
+    public MetadataInfo() {}
 
     public MetadataInfo(String app) {
         this(app, null, null);
@@ -92,15 +95,15 @@ public class MetadataInfo implements Serializable {
         }
 
         if (CollectionUtils.isEmptyMap(services)) {
-            return DEFAULT_REVISION;
+            this.revision = RevisionResolver.getEmptyRevision(app);
+        } else {
+            StringBuilder sb = new StringBuilder();
+            sb.append(app);
+            for (Map.Entry<String, ServiceInfo> entry : new TreeMap<>(services).entrySet()) {
+                sb.append(entry.getValue().toDescString());
+            }
+            this.revision = RevisionResolver.calRevision(sb.toString());
         }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(app);
-        for (Map.Entry<String, ServiceInfo> entry : new TreeMap<>(services).entrySet()) {
-            sb.append(entry.getValue().toDescString());
-        }
-        this.revision = RevisionResolver.calRevision(sb.toString());
         return revision;
     }
 
@@ -203,7 +206,7 @@ public class MetadataInfo implements Serializable {
         // service + group + version + protocol
         private transient String matchKey;
 
-        private URL url;
+        private transient URL url;
 
         public ServiceInfo() {
         }
@@ -305,6 +308,14 @@ public class MetadataInfo implements Serializable {
             this.path = path;
         }
 
+        public String getProtocol() {
+            return protocol;
+        }
+
+        public void setProtocol(String protocol) {
+            this.protocol = protocol;
+        }
+
         public Map<String, String> getParams() {
             if (params == null) {
                 return Collections.emptyMap();
@@ -356,9 +367,6 @@ public class MetadataInfo implements Serializable {
                 Map<String, String> keyMap = map.get(method);
                 if (keyMap != null) {
                     value = keyMap.get(key);
-                }
-                if (StringUtils.isEmpty(value)) {
-                    value = getParameter(key);
                 }
             }
             return value;

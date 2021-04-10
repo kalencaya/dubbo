@@ -17,15 +17,14 @@
 package org.apache.dubbo.config.spring.beans.factory.annotation;
 
 
+import org.apache.dubbo.config.ReferenceConfig;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.apache.dubbo.config.annotation.Reference;
-import org.apache.dubbo.config.spring.ReferenceBean;
-import org.apache.dubbo.rpc.model.ApplicationModel;
-
+import org.apache.dubbo.config.bootstrap.DubboBootstrap;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -73,16 +72,17 @@ public class ReferenceBeanBuilderTest {
             // @since 2.7.3
             id = "reference",
             // @since 2.7.8
-            services = {"service1", "service2", "service3", "service2", "service1"}
+            services = {"service1", "service2", "service3", "service2", "service1"},
+            providedBy = {"service1", "service2", "service3"}
     )
     private static final Object TEST_FIELD = new Object();
 
     @Autowired
     private ApplicationContext context;
 
-    @Before
+    @BeforeEach
     public void init() {
-        ApplicationModel.reset();
+        DubboBootstrap.reset();
     }
 
     @Test
@@ -90,8 +90,8 @@ public class ReferenceBeanBuilderTest {
         DubboReference reference = findAnnotation(findField(getClass(), "TEST_FIELD"), DubboReference.class);
         AnnotationAttributes attributes = AnnotationUtils.getAnnotationAttributes(reference, false, false);
         ReferenceBeanBuilder beanBuilder = ReferenceBeanBuilder.create(attributes, context);
-        beanBuilder.interfaceClass(CharSequence.class);
-        ReferenceBean referenceBean = beanBuilder.build();
+        beanBuilder.defaultInterfaceClass(CharSequence.class);
+        ReferenceConfig referenceBean = beanBuilder.build();
         Assert.assertEquals(CharSequence.class, referenceBean.getInterfaceClass());
         Assert.assertEquals("1.0.0", referenceBean.getVersion());
         Assert.assertEquals("TEST_GROUP", referenceBean.getGroup());
@@ -127,6 +127,7 @@ public class ReferenceBeanBuilderTest {
         Assert.assertEquals("deprecated", referenceBean.getListener());
         Assert.assertEquals("reference", referenceBean.getId());
         Assert.assertEquals(ofSet("service1", "service2", "service3"), referenceBean.getSubscribedServices());
+        Assert.assertEquals("service1,service2,service3", referenceBean.getProvidedBy());
 
         // parameters
         Map<String, String> parameters = new HashMap<String, String>();

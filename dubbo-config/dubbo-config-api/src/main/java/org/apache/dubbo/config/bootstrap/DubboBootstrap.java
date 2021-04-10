@@ -68,7 +68,6 @@ import org.apache.dubbo.metadata.report.MetadataReportFactory;
 import org.apache.dubbo.metadata.report.MetadataReportInstance;
 import org.apache.dubbo.registry.client.DefaultServiceInstance;
 import org.apache.dubbo.registry.client.ServiceInstance;
-import org.apache.dubbo.registry.client.ServiceInstanceCustomizer;
 import org.apache.dubbo.registry.client.metadata.MetadataUtils;
 import org.apache.dubbo.registry.client.metadata.ServiceInstanceMetadataUtils;
 import org.apache.dubbo.registry.client.metadata.store.InMemoryWritableMetadataService;
@@ -82,7 +81,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -172,9 +170,11 @@ public class DubboBootstrap extends GenericEventListener {
 
     private AtomicBoolean started = new AtomicBoolean(false);
 
-    private AtomicBoolean ready = new AtomicBoolean(true);
+    private AtomicBoolean startup = new AtomicBoolean(true);
 
     private AtomicBoolean destroyed = new AtomicBoolean(false);
+
+    private AtomicBoolean shutdown = new AtomicBoolean(false);
 
     private volatile ServiceInstance serviceInstance;
 
@@ -200,6 +200,14 @@ public class DubboBootstrap extends GenericEventListener {
             }
         }
         return instance;
+    }
+
+    public static void reset() {
+        if (instance != null) {
+            instance.destroy();
+        }
+        ApplicationModel.reset();
+        instance = null;
     }
 
     private DubboBootstrap() {
@@ -520,6 +528,7 @@ public class DubboBootstrap extends GenericEventListener {
         }
 
         ApplicationModel.initFrameworkExts();
+        
 
         startConfigCenter();
 
@@ -862,7 +871,7 @@ public class DubboBootstrap extends GenericEventListener {
      * Initialize {@link MetadataService} from {@link WritableMetadataService}'s extension
      */
     private void initMetadataService() {
-        startMetadataCenter();
+//        startMetadataCenter();
         this.metadataService = getDefaultExtension();
         this.metadataServiceExporter = new ConfigurableMetadataServiceExporter(metadataService);
     }
@@ -880,7 +889,7 @@ public class DubboBootstrap extends GenericEventListener {
      */
     public DubboBootstrap start() {
         if (started.compareAndSet(false, true)) {
-            ready.set(false);
+            startup.set(false);
             initialize();
             if (logger.isInfoEnabled()) {
                 logger.info(NAME + " is starting...");
@@ -904,13 +913,13 @@ public class DubboBootstrap extends GenericEventListener {
                     } catch (Exception e) {
                         logger.warn(NAME + " exportAsync occurred an exception.");
                     }
-                    ready.set(true);
+                    startup.set(true);
                     if (logger.isInfoEnabled()) {
                         logger.info(NAME + " is ready.");
                     }
                 }).start();
             } else {
-                ready.set(true);
+                startup.set(true);
                 if (logger.isInfoEnabled()) {
                     logger.info(NAME + " is ready.");
                 }
@@ -975,8 +984,12 @@ public class DubboBootstrap extends GenericEventListener {
         return started.get();
     }
 
-    public boolean isReady() {
-        return ready.get();
+    public boolean isStartup() {
+        return startup.get();
+    }
+
+    public boolean isShutdown() {
+        return shutdown.get();
     }
 
     public DubboBootstrap stop() throws IllegalStateException {
@@ -1140,82 +1153,55 @@ public class DubboBootstrap extends GenericEventListener {
     }
 
     private void registerServiceInstance() {
-        if (CollectionUtils.isEmpty(getServiceDiscoveries())) {
-            return;
-        }
-
         ApplicationConfig application = getApplication();
 
         String serviceName = application.getName();
 
-        URL exportedURL = selectMetadataServiceExportedURL();
+        ServiceInstance serviceInstance = createServiceInstance(serviceName);
 
-        String host = exportedURL.getHost();
-
-        int port = exportedURL.getPort();
-
-        ServiceInstance serviceInstance = createServiceInstance(serviceName, host, port);
-
-        doRegisterServiceInstance(serviceInstance);
+        try {
+            doRegisterServiceInstance(serviceInstance);
+        } catch (Exception e) {
+            logger.error("Register instance error", e);
+        }
 
         // scheduled task for updating Metadata and ServiceInstance
         executorRepository.nextScheduledExecutor().scheduleAtFixedRate(() -> {
             InMemoryWritableMetadataService localMetadataService = (InMemoryWritableMetadataService) WritableMetadataService.getDefaultExtension();
             localMetadataService.blockUntilUpdated();
-            ServiceInstanceMetadataUtils.refreshMetadataAndInstance();
-        }, 0, ConfigurationUtils.get(METADATA_PUBLISH_DELAY_KEY, DEFAULT_METADATA_PUBLISH_DELAY), TimeUnit.MICROSECONDS);
+            try {
+                ServiceInstanceMetadataUtils.refreshMetadataAndInstance(serviceInstance);
+            } catch (Exception e) {
+                logger.error("Refresh instance and metadata error", e);
+            }
+        }, 0, ConfigurationUtils.get(METADATA_PUBLISH_DELAY_KEY, DEFAULT_METADATA_PUBLISH_DELAY), TimeUnit.MILLISECONDS);
     }
 
     private void doRegisterServiceInstance(ServiceInstance serviceInstance) {
-        //FIXME
-        if (logger.isInfoEnabled()) {
-            logger.info("Start publishing metadata to remote center, this only makes sense for applications enabled remote metadata center.");
+        // register instance only when at least one service is exported.
+        if (serviceInstance.getPort() > 0) {
+            publishMetadataToRemote(serviceInstance);
+            logger.info("Start registering instance address to registry.");
+            getServiceDiscoveries().forEach(serviceDiscovery ->
+            {
+                calInstanceRevision(serviceDiscovery, serviceInstance);
+                if (logger.isDebugEnabled()) {
+                    logger.info("Start registering instance address to registry" + serviceDiscovery.getUrl() + ", instance " + serviceInstance);
+                }
+                // register metadata
+                serviceDiscovery.register(serviceInstance);
+            });
         }
-        publishMetadataToRemote(serviceInstance);
-
-        logger.info("Start registering instance address to registry.");
-        getServiceDiscoveries().forEach(serviceDiscovery ->
-        {
-            calInstanceRevision(serviceDiscovery, serviceInstance);
-            if (logger.isDebugEnabled()) {
-                logger.info("Start registering instance address to registry" + serviceDiscovery.getUrl() + ", instance " + serviceInstance);
-            }
-            // register metadata
-            serviceDiscovery.register(serviceInstance);
-        });
     }
 
     private void publishMetadataToRemote(ServiceInstance serviceInstance) {
 //        InMemoryWritableMetadataService localMetadataService = (InMemoryWritableMetadataService)WritableMetadataService.getDefaultExtension();
 //        localMetadataService.blockUntilUpdated();
+        if (logger.isInfoEnabled()) {
+            logger.info("Start publishing metadata to remote center, this only makes sense for applications enabled remote metadata center.");
+        }
         RemoteMetadataServiceImpl remoteMetadataService = MetadataUtils.getRemoteMetadataService();
         remoteMetadataService.publishMetadata(serviceInstance.getServiceName());
-    }
-
-    private URL selectMetadataServiceExportedURL() {
-
-        URL selectedURL = null;
-
-        SortedSet<String> urlValues = metadataService.getExportedURLs();
-
-        for (String urlValue : urlValues) {
-            URL url = URL.valueOf(urlValue);
-            if (MetadataService.class.getName().equals(url.getServiceInterface())) {
-                continue;
-            }
-            if ("rest".equals(url.getProtocol())) { // REST first
-                selectedURL = url;
-                break;
-            } else {
-                selectedURL = url; // If not found, take any one
-            }
-        }
-
-        if (selectedURL == null && CollectionUtils.isNotEmpty(urlValues)) {
-            selectedURL = URL.valueOf(urlValues.iterator().next());
-        }
-
-        return selectedURL;
     }
 
     private void unregisterServiceInstance() {
@@ -1226,23 +1212,16 @@ public class DubboBootstrap extends GenericEventListener {
         }
     }
 
-    private ServiceInstance createServiceInstance(String serviceName, String host, int port) {
-        this.serviceInstance = new DefaultServiceInstance(serviceName, host, port);
+    private ServiceInstance createServiceInstance(String serviceName) {
+        this.serviceInstance = new DefaultServiceInstance(serviceName);
         setMetadataStorageType(serviceInstance, getMetadataType());
-
-        ExtensionLoader<ServiceInstanceCustomizer> loader =
-                ExtensionLoader.getExtensionLoader(ServiceInstanceCustomizer.class);
-        // FIXME, sort customizer before apply
-        loader.getSupportedExtensionInstances().forEach(customizer -> {
-            // customizes
-            customizer.customize(this.serviceInstance);
-        });
-
+        ServiceInstanceMetadataUtils.customizeInstance(this.serviceInstance);
         return this.serviceInstance;
     }
 
     public void destroy() {
-        if (destroyLock.tryLock()) {
+        if (destroyLock.tryLock()
+                && shutdown.compareAndSet(false, true)) {
             try {
                 DubboShutdownHook.destroyAll();
 
@@ -1333,7 +1312,9 @@ public class DubboBootstrap extends GenericEventListener {
                     return applicationConfig;
                 });
 
-        application.refresh();
+        if (!application.isRefreshed()) {
+            application.refresh();
+        }
         return application;
     }
 

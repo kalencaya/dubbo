@@ -33,6 +33,7 @@ import org.apache.dubbo.registry.client.metadata.ServiceInstanceMetadataUtils;
 import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.rpc.RpcException;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER_SIDE;
@@ -60,15 +61,22 @@ public class RemoteMetadataServiceImpl {
                 SubscriberMetadataIdentifier identifier = new SubscriberMetadataIdentifier(serviceName, metadataInfo.calAndGetRevision());
                 metadataInfo.calAndGetRevision();
                 metadataInfo.getExtendParams().put(REGISTRY_CLUSTER_KEY, registryCluster);
-                MetadataReport metadataReport = getMetadataReports().get(registryCluster);
-                if (metadataReport == null) {
-                    metadataReport = getMetadataReports().entrySet().iterator().next().getValue();
+                if (getMetadataReports().size() > 0) {
+                    MetadataReport metadataReport = getMetadataReports().get(registryCluster);
+                    if (metadataReport == null) {
+                        metadataReport = getMetadataReports().entrySet().iterator().next().getValue();
+                    }
+                    logger.info("Publishing metadata to " + metadataReport.getClass().getSimpleName());
+                    if (logger.isDebugEnabled()) {
+                        logger.debug(metadataInfo.toString());
+                    }
+                    metadataReport.publishAppMetadata(identifier, metadataInfo);
+                } else {
+                    if (logger.isInfoEnabled()) {
+                        logger.info("Remote Metadata Report Server not hasn't been configured. " +
+                                "Only publish Metadata to local.");
+                    }
                 }
-                logger.info("Publishing metadata to " + metadataReport.getClass().getSimpleName());
-                if (logger.isDebugEnabled()) {
-                    logger.debug(metadataInfo.toString());
-                }
-                metadataReport.publishAppMetadata(identifier, metadataInfo);
                 metadataInfo.markReported();
             }
         });
@@ -78,17 +86,35 @@ public class RemoteMetadataServiceImpl {
         SubscriberMetadataIdentifier identifier = new SubscriberMetadataIdentifier(instance.getServiceName(),
                 ServiceInstanceMetadataUtils.getExportedServicesRevision(instance));
 
-        String registryCluster = instance.getExtendParams().get(REGISTRY_CLUSTER_KEY);
+        String registryCluster = instance.getRegistryCluster();
+
+        checkRemoteConfigured();
 
         MetadataReport metadataReport = getMetadataReports().get(registryCluster);
         if (metadataReport == null) {
             metadataReport = getMetadataReports().entrySet().iterator().next().getValue();
         }
-        return metadataReport.getAppMetadata(identifier, instance.getExtendParams());
+        Map<String, String> params = new HashMap<>(instance.getExtendParams());
+        if (instance.getRegistryCluster() != null && !instance.getRegistryCluster().equalsIgnoreCase(params.get(REGISTRY_CLUSTER_KEY))) {
+            params.put(REGISTRY_CLUSTER_KEY, instance.getRegistryCluster());
+        }
+        return metadataReport.getAppMetadata(identifier, params);
+    }
+
+    private void checkRemoteConfigured() {
+        if (getMetadataReports().size() == 0) {
+            String msg = "Remote Metadata Report Server not hasn't been configured. " +
+                    "Unable to get Metadata from remote!";
+            logger.error(msg);
+            throw new IllegalStateException(msg);
+        }
     }
 
     public void publishServiceDefinition(URL url) {
         String side = url.getSide();
+
+        checkRemoteConfigured();
+
         if (PROVIDER_SIDE.equalsIgnoreCase(side)) {
             //TODO, the params part is duplicate with that stored by exportURL(url), can be further optimized in the future.
             publishProvider(url);

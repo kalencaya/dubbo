@@ -29,7 +29,6 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.cluster.ClusterInvoker;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
@@ -37,7 +36,6 @@ import org.apache.dubbo.rpc.support.RpcUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_LOADBALANCE;
@@ -81,16 +79,16 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
 
     @Override
     public Class<T> getInterface() {
-        return directory.getInterface();
+        return getDirectory().getInterface();
     }
 
     @Override
     public URL getUrl() {
-        return directory.getConsumerUrl();
+        return getDirectory().getConsumerUrl();
     }
 
     public URL getRegistryUrl() {
-        return directory.getUrl();
+        return getDirectory().getUrl();
     }
 
     @Override
@@ -99,7 +97,7 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         if (invoker != null) {
             return invoker.isAvailable();
         }
-        return directory.isAvailable();
+        return getDirectory().isAvailable();
     }
 
     public Directory<T> getDirectory() {
@@ -109,7 +107,7 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
     @Override
     public void destroy() {
         if (destroyed.compareAndSet(false, true)) {
-            directory.destroy();
+            getDirectory().destroy();
         }
     }
 
@@ -256,10 +254,10 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         checkWhetherDestroyed();
 
         // binding attachments into invocation.
-        Map<String, Object> contextAttachments = RpcContext.getContext().getObjectAttachments();
-        if (contextAttachments != null && contextAttachments.size() != 0) {
-            ((RpcInvocation) invocation).addObjectAttachments(contextAttachments);
-        }
+//        Map<String, Object> contextAttachments = RpcContext.getContext().getObjectAttachments();
+//        if (contextAttachments != null && contextAttachments.size() != 0) {
+//            ((RpcInvocation) invocation).addObjectAttachmentsIfAbsent(contextAttachments);
+//        }
 
         List<Invoker<T>> invokers = list(invocation);
         LoadBalance loadbalance = initLoadBalance(invokers, invocation);
@@ -284,8 +282,8 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         if (CollectionUtils.isEmpty(invokers)) {
             throw new RpcException(RpcException.NO_INVOKER_AVAILABLE_AFTER_FILTER, "Failed to invoke the method "
                     + invocation.getMethodName() + " in the service " + getInterface().getName()
-                    + ". No provider available for the service " + directory.getConsumerUrl().getServiceKey()
-                    + " from registry " + directory.getUrl().getAddress()
+                    + ". No provider available for the service " + getDirectory().getConsumerUrl().getServiceKey()
+                    + " from registry " + getDirectory().getUrl().getAddress()
                     + " on the consumer " + NetUtils.getLocalHost()
                     + " using the dubbo version " + Version.getVersion()
                     + ". Please check if the providers have been started and registered.");
@@ -307,7 +305,7 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
                                        LoadBalance loadbalance) throws RpcException;
 
     protected List<Invoker<T>> list(Invocation invocation) throws RpcException {
-        return directory.list(invocation);
+        return getDirectory().list(invocation);
     }
 
     /**

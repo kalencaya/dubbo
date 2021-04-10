@@ -27,6 +27,8 @@ import java.util.regex.Pattern;
 public interface CommonConstants {
     String DUBBO = "dubbo";
 
+    String TRIPLE= "tri";
+
     String PROVIDER = "provider";
 
     String CONSUMER = "consumer";
@@ -42,6 +44,10 @@ public interface CommonConstants {
     String DUBBO_PROPERTIES_KEY = "dubbo.properties.file";
 
     String DEFAULT_DUBBO_PROPERTIES = "dubbo.properties";
+
+    String DUBBO_MIGRATION_KEY = "dubbo.migration.file";
+
+    String DEFAULT_DUBBO_MIGRATION_FILE = "dubbo-migration.yaml";
 
     String ANY_VALUE = "*";
 
@@ -263,6 +269,8 @@ public interface CommonConstants {
 
     String REFERENCE_FILTER_KEY = "reference.filter";
 
+    String INVOCATION_INTERCEPTOR_KEY = "invocation.interceptor";
+
     String INVOKER_LISTENER_KEY = "invoker.listener";
 
     String DUBBO_VERSION_KEY = "dubbo";
@@ -361,11 +369,17 @@ public interface CommonConstants {
      */
     String DEFAULT_SERVICE_NAME_MAPPING_PROPERTIES_PATH = "META-INF/dubbo/service-name-mapping.properties";
 
-    String REGISTRY_DELAY_NOTIFICATION_KEY = "delay-notification";
+    String QOS_LIVE_PROBE_EXTENSION = "dubbo.application.liveness-probe";
 
-    String FILTER_BUILDER_KEY = "filter-builder";
+    String QOS_READY_PROBE_EXTENSION = "dubbo.application.readiness-probe";
+
+    String QOS_STARTUP_PROBE_EXTENSION = "dubbo.application.startup-probe";
+
+    String REGISTRY_DELAY_NOTIFICATION_KEY = "delay-notification";
 
     String CACHE_CLEAR_TASK_INTERVAL = "dubbo.application.url.cache.task.interval";
     String CACHE_CLEAR_WAITING_THRESHOLD = "dubbo.application.url.cache.clear.waiting";
+
+    String CLUSTER_INTERCEPTOR_COMPATIBLE_KEY = "dubbo.application.cluster.interceptor.compatible";
 
 }
